@@ -123,7 +123,7 @@ export const content: Record<"en" | "et", SiteContent> = {
     },
     footer: {
       built:
-        "Built in AI Web Session 2026, ClearContent CMS, Student: <STUDENT_NAME>, Team: <TEAM_SLUG>",
+        "Built in AI Web Session 2026, ClearContent CMS, Student: Diego Alvarez, Team: <TEAM_SLUG>",
     },
   },
 };
