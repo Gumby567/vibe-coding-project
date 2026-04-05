@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { BlockLocalizedContent, ContentBlock } from "../../../types/cms";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { createDefaultBlocks } from "@/lib/default-blocks";
+import { useMemo, useState } from "react";
+import { useOutletContext } from "react-router-dom";
+import type { AdminCmsContextValue } from "@/hooks/useAdminCms";
+import type { BlockLocalizedContent, BlockType, ContentBlock } from "../../../types/cms";
+import { createEmptyBlock } from "@/lib/cms-defaults";
+import { sortBlocks } from "@/lib/cms-defaults";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,14 +12,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { canDeleteBlocks } from "@/lib/auth-roles";
-import { ChevronDown, ChevronUp, Pencil, Save, Trash2 } from "lucide-react";
-
-function sortBlocks(list: ContentBlock[]) {
-  return [...list].sort((a, b) => a.order - b.order);
-}
+import { ChevronDown, ChevronUp, Copy, Pencil, Plus, Save, Trash2 } from "lucide-react";
+import { createDefaultCmsPayload } from "@/lib/cms-defaults";
 
 function hexFromCssBackground(bg: string): string {
   const m = /^#([0-9a-fA-F]{6})$/.exec(bg.trim());
@@ -26,81 +28,89 @@ function hexFromCssBackground(bg: string): string {
 
 const PageBuilder = () => {
   const { toast } = useToast();
-  const { role } = useAuth();
+  const { user, role } = useAuth();
   const showDelete = canDeleteBlocks(role);
-  const [rowId, setRowId] = useState<string | null>(null);
-  const [blocks, setBlocks] = useState<ContentBlock[]>([]);
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const ctx = useOutletContext<AdminCmsContextValue>();
+  const { payload, setPayload, savePayload, rowId, loading, error, updatedAt } = ctx;
+
   const [saving, setSaving] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [editing, setEditing] = useState<ContentBlock | null>(null);
   const [draft, setDraft] = useState<ContentBlock | null>(null);
+  const [addType, setAddType] = useState<BlockType>("hero");
 
-  const sorted = useMemo(() => sortBlocks(blocks), [blocks]);
+  const userEmail = user?.email ?? null;
+  const sorted = useMemo(() => sortBlocks(payload.blocks), [payload.blocks]);
 
-  const refreshSession = useCallback(async () => {
-    if (!supabase) return;
-    const { data } = await supabase.auth.getSession();
-    setUserEmail(data.session?.user?.email ?? null);
-  }, []);
-
-  const fetchContent = useCallback(async () => {
-    if (!isSupabaseConfigured || !supabase) {
-      setLoading(false);
-      setLoadError("Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment.");
+  const persist = async () => {
+    if (!isSupabaseConfigured) {
+      toast({ title: "Supabase is not configured", variant: "destructive" });
       return;
     }
-    setLoading(true);
-    setLoadError(null);
-    const { data, error } = await supabase.from("site_content").select("*").limit(1).maybeSingle();
-    if (error) {
-      setLoadError(error.message);
-      setRowId(null);
-      setBlocks([]);
-      setUpdatedAt(null);
-      setLoading(false);
+    if (!rowId) {
+      toast({ title: "Initialize site content first.", variant: "destructive" });
       return;
     }
-    if (!data) {
-      setRowId(null);
-      setBlocks([]);
-      setUpdatedAt(null);
-      setLoading(false);
+    setSaving(true);
+    const next = { ...payload, blocks: sortBlocks(payload.blocks) };
+    const result = await savePayload(next);
+    setSaving(false);
+    if (result.error) {
+      toast({ title: "Save failed", description: result.error, variant: "destructive" });
       return;
     }
-    setRowId(data.id);
-    setBlocks((data.blocks as ContentBlock[]) ?? []);
-    setUpdatedAt(data.updated_at ?? null);
-    setLoading(false);
-  }, []);
+    toast({ title: "Saved", description: "Public site will update after refresh." });
+  };
 
-  useEffect(() => {
-    fetchContent();
-    refreshSession();
-  }, [fetchContent, refreshSession]);
+  const initializeRow = async () => {
+    if (!isSupabaseConfigured) return;
+    setSaving(true);
+    const result = await savePayload(createDefaultCmsPayload());
+    setSaving(false);
+    if (result.error) {
+      toast({ title: "Could not create row", description: result.error, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Site content initialized" });
+  };
+
+  const syncBlocks = (blocks: ContentBlock[]) => setPayload({ ...payload, blocks });
 
   const removeBlock = (blockId: string) => {
-    setBlocks((prev) => {
-      const filtered = prev.filter((b) => b.id !== blockId);
-      return sortBlocks(filtered).map((b, i) => ({ ...b, order: i }));
-    });
+    syncBlocks(
+      sortBlocks(payload.blocks.filter((b) => b.id !== blockId)).map((b, i) => ({ ...b, order: i })),
+    );
+  };
+
+  const duplicateBlock = (block: ContentBlock) => {
+    const copy: ContentBlock = JSON.parse(JSON.stringify(block));
+    copy.id = `blk-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    copy.order = Math.max(...payload.blocks.map((b) => b.order), -1) + 1;
+    syncBlocks([...payload.blocks, copy]);
+  };
+
+  const addBlock = () => {
+    const nb = createEmptyBlock(addType);
+    nb.order = Math.max(...payload.blocks.map((b) => b.order), -1) + 1;
+    syncBlocks([...payload.blocks, nb]);
   };
 
   const move = (index: number, dir: -1 | 1) => {
-    const list = sortBlocks(blocks);
+    const list = sortBlocks(payload.blocks);
     const next = index + dir;
     if (next < 0 || next >= list.length) return;
     const a = list[index];
     const b = list[next];
-    setBlocks(
-      blocks.map((bl) => {
+    syncBlocks(
+      payload.blocks.map((bl) => {
         if (bl.id === a.id) return { ...bl, order: b.order };
         if (bl.id === b.id) return { ...bl, order: a.order };
         return bl;
       }),
     );
+  };
+
+  const toggleVisible = (blockId: string, visible: boolean) => {
+    syncBlocks(payload.blocks.map((b) => (b.id === blockId ? { ...b, isVisible: visible } : b)));
   };
 
   const openEdit = (block: ContentBlock) => {
@@ -121,85 +131,25 @@ const PageBuilder = () => {
 
   const saveDraftToBlocks = () => {
     if (!draft) return;
-    setBlocks((prev) => prev.map((b) => (b.id === draft.id ? draft : b)));
+    syncBlocks(payload.blocks.map((b) => (b.id === draft.id ? draft : b)));
     setEditing(null);
     setDraft(null);
   };
 
-  const persist = async () => {
-    if (!isSupabaseConfigured || !supabase) {
-      toast({ title: "Supabase is not configured", variant: "destructive" });
-      return;
-    }
-    if (!rowId) {
-      toast({ title: "Nothing to save", description: "Initialize site content first.", variant: "destructive" });
-      return;
-    }
-    setSaving(true);
-    const ts = new Date().toISOString();
-    const { data: sessionData } = await supabase.auth.getSession();
-    const email = sessionData.session?.user?.email ?? null;
-
-    const { error, data } = await supabase
-      .from("site_content")
-      .update({
-        blocks: sortBlocks(blocks),
-        updated_at: ts,
-      })
-      .eq("id", rowId)
-      .select("updated_at")
-      .maybeSingle();
-
-    setSaving(false);
-    if (error) {
-      toast({ title: "Save failed", description: error.message, variant: "destructive" });
-      return;
-    }
-    setUpdatedAt(data?.updated_at ?? ts);
-    setUserEmail(email);
-    toast({ title: "Saved", description: "Site content was updated." });
-  };
-
-  const initializeRow = async () => {
-    if (!isSupabaseConfigured || !supabase) return;
-    setSaving(true);
-    const seed = createDefaultBlocks();
-    const { data, error } = await supabase.from("site_content").insert({ blocks: seed }).select("*").single();
-    setSaving(false);
-    if (error) {
-      toast({ title: "Could not create row", description: error.message, variant: "destructive" });
-      return;
-    }
-    setRowId(data.id);
-    setBlocks((data.blocks as ContentBlock[]) ?? seed);
-    setUpdatedAt(data.updated_at ?? null);
-    toast({ title: "Site content initialized" });
-  };
-
   const renderLangFields = (lang: "en" | "et") => {
     if (!draft) return null;
-    const c = draft.content[lang];
+    const c = draft.content[lang] ?? {};
     const t = draft.type;
-
     if (t === "hero") {
       return (
         <div className="space-y-3">
           <div>
             <Label>Title</Label>
-            <Input
-              className="mt-1"
-              value={c.title ?? ""}
-              onChange={(e) => applyDraftLang(lang, { title: e.target.value })}
-            />
+            <Input className="mt-1" value={c.title ?? ""} onChange={(e) => applyDraftLang(lang, { title: e.target.value })} />
           </div>
           <div>
             <Label>Subtitle</Label>
-            <Textarea
-              className="mt-1"
-              rows={3}
-              value={c.subtitle ?? ""}
-              onChange={(e) => applyDraftLang(lang, { subtitle: e.target.value })}
-            />
+            <Textarea className="mt-1" rows={3} value={c.subtitle ?? ""} onChange={(e) => applyDraftLang(lang, { subtitle: e.target.value })} />
           </div>
           <div>
             <Label>CTA</Label>
@@ -230,7 +180,6 @@ const PageBuilder = () => {
                 })
               }
             />
-            <p className="text-xs text-muted-foreground mt-1">Separate paragraphs with a blank line.</p>
           </div>
         </div>
       );
@@ -269,12 +218,7 @@ const PageBuilder = () => {
         </div>
         <div>
           <Label>Subtitle</Label>
-          <Textarea
-            className="mt-1"
-            rows={3}
-            value={c.subtitle ?? ""}
-            onChange={(e) => applyDraftLang(lang, { subtitle: e.target.value })}
-          />
+          <Textarea className="mt-1" rows={3} value={c.subtitle ?? ""} onChange={(e) => applyDraftLang(lang, { subtitle: e.target.value })} />
         </div>
       </div>
     );
@@ -288,90 +232,115 @@ const PageBuilder = () => {
     <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold">Page Builder</h2>
+          <h2 className="text-xl font-semibold">Visual page builder</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Reorder sections, edit copy (EN/ET), and section backgrounds. Save to update the database.
+            Reorder, show/hide, duplicate, and edit blocks. Typography and layout options are in each block&apos;s edit panel.
           </p>
         </div>
-        <Button onClick={persist} disabled={saving || !rowId} className="gap-2 shrink-0">
-          <Save className="h-4 w-4" />
-          {saving ? "Saving…" : "Save"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={persist} disabled={saving || !rowId} className="gap-2">
+            <Save className="h-4 w-4" />
+            {saving ? "Saving…" : "Save to Supabase"}
+          </Button>
+        </div>
       </div>
 
-      {loadError && (
+      {error && (
         <Card className="border-destructive/50">
-          <CardContent className="pt-6 text-sm text-destructive">{loadError}</CardContent>
+          <CardContent className="pt-6 text-sm text-destructive">{error}</CardContent>
         </Card>
       )}
 
-      {!loadError && isSupabaseConfigured && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium">Session &amp; publish</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground space-y-1">
-            <p>
-              <span className="text-foreground font-medium">Last updated:</span>{" "}
-              {updatedAt ? new Date(updatedAt).toLocaleString() : "—"}
-            </p>
-            <p>
-              <span className="text-foreground font-medium">Signed in as:</span> {userEmail ?? "Not signed in"}
-            </p>
-            <p>
-              <span className="text-foreground font-medium">Role:</span> {role ?? "—"}
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base font-medium">Audit</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground space-y-1">
+          <p>
+            <span className="text-foreground font-medium">Site last updated:</span>{" "}
+            {updatedAt ? new Date(updatedAt).toLocaleString() : "—"}
+          </p>
+          <p>
+            <span className="text-foreground font-medium">Signed in as:</span> {userEmail ?? "—"}
+          </p>
+          <p>
+            <span className="text-foreground font-medium">Role:</span> {role ?? "—"}
+          </p>
+        </CardContent>
+      </Card>
 
-      {!rowId && isSupabaseConfigured && !loadError && (
+      {!rowId && isSupabaseConfigured && !error && (
         <Card>
           <CardContent className="pt-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <p className="text-sm text-muted-foreground">No row in <code className="text-xs">site_content</code> yet.</p>
+            <p className="text-sm text-muted-foreground">
+              No row in <code className="text-xs">site_content</code> yet. Creates default blocks + menu + form config.
+            </p>
             <Button variant="secondary" onClick={initializeRow} disabled={saving}>
-              Initialize from template
+              Initialize CMS
             </Button>
           </CardContent>
         </Card>
       )}
 
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base font-medium">Add block</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2 items-end">
+          <div className="space-y-1">
+            <Label>Block type</Label>
+            <Select value={addType} onValueChange={(v) => setAddType(v as BlockType)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="hero">Hero</SelectItem>
+                <SelectItem value="about">About</SelectItem>
+                <SelectItem value="offers">Offers</SelectItem>
+                <SelectItem value="contact">Contact</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button type="button" variant="outline" className="gap-1" onClick={addBlock}>
+            <Plus className="h-4 w-4" />
+            Add
+          </Button>
+        </CardContent>
+      </Card>
+
       <div className="space-y-3">
         {sorted.map((block, index) => (
-          <Card key={block.id}>
-            <CardContent className="py-4 flex flex-col sm:flex-row sm:items-center gap-3">
-              <div className="flex-1 min-w-0">
-                <p className="font-medium capitalize">{block.type}</p>
-                <p className="text-xs text-muted-foreground truncate">
-                  Order {block.order} · {(block.content.en.title ?? block.content.en.subtitle ?? "").slice(0, 80)}
-                </p>
+          <Card key={block.id} className={!block.isVisible ? "opacity-60" : ""}>
+            <CardContent className="py-4 flex flex-col gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium capitalize">{block.type}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    Order {block.order} · {(block.content.en?.title ?? block.content.en?.subtitle ?? "").toString().slice(0, 80)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={block.isVisible} onCheckedChange={(v) => toggleVisible(block.id, v)} aria-label="Visible on site" />
+                  <span className="text-xs text-muted-foreground hidden sm:inline">Visible</span>
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Button type="button" variant="outline" size="icon" aria-label="Move up" disabled={index === 0} onClick={() => move(index, -1)}>
                   <ChevronUp className="h-4 w-4" />
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  aria-label="Move down"
-                  disabled={index === sorted.length - 1}
-                  onClick={() => move(index, 1)}
-                >
+                <Button type="button" variant="outline" size="icon" aria-label="Move down" disabled={index === sorted.length - 1} onClick={() => move(index, 1)}>
                   <ChevronDown className="h-4 w-4" />
                 </Button>
                 <Button type="button" variant="secondary" className="gap-1" onClick={() => openEdit(block)}>
                   <Pencil className="h-4 w-4" />
                   Edit
                 </Button>
+                <Button type="button" variant="outline" className="gap-1" onClick={() => duplicateBlock(block)}>
+                  <Copy className="h-4 w-4" />
+                  Duplicate
+                </Button>
                 {showDelete && (
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="icon"
-                    aria-label={`Delete ${block.type} block`}
-                    onClick={() => removeBlock(block.id)}
-                  >
+                  <Button type="button" variant="destructive" size="icon" aria-label={`Delete ${block.type}`} onClick={() => removeBlock(block.id)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 )}
@@ -410,50 +379,114 @@ const PageBuilder = () => {
               </Tabs>
 
               <div className="space-y-3 border-t pt-4">
+                <p className="text-sm font-medium">Layout &amp; typography</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Text align</Label>
+                    <Select
+                      value={draft.style.textAlign ?? "center"}
+                      onValueChange={(v) =>
+                        setDraft({
+                          ...draft,
+                          style: { ...draft.style, textAlign: v as "left" | "center" | "right" },
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="left">Left</SelectItem>
+                        <SelectItem value="center">Center</SelectItem>
+                        <SelectItem value="right">Right</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Heading size</Label>
+                    <Select
+                      value={draft.style.headingPreset ?? "lg"}
+                      onValueChange={(v) =>
+                        setDraft({
+                          ...draft,
+                          style: { ...draft.style, headingPreset: v as "sm" | "md" | "lg" | "xl" },
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sm">Small</SelectItem>
+                        <SelectItem value="md">Medium</SelectItem>
+                        <SelectItem value="lg">Large</SelectItem>
+                        <SelectItem value="xl">XL</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs">Body size</Label>
+                    <Select
+                      value={draft.style.bodyPreset ?? "md"}
+                      onValueChange={(v) =>
+                        setDraft({ ...draft, style: { ...draft.style, bodyPreset: v as "sm" | "md" | "lg" } })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sm">Small</SelectItem>
+                        <SelectItem value="md">Medium</SelectItem>
+                        <SelectItem value="lg">Large</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3 border-t pt-4">
                 <p className="text-sm font-medium">Background</p>
                 <div className="flex flex-wrap items-end gap-3">
                   <div>
-                    <Label className="text-xs">Color (solid)</Label>
+                    <Label className="text-xs">Color</Label>
                     <Input
                       type="color"
                       className="h-10 w-14 p-1 cursor-pointer"
                       value={hexFromCssBackground(draft.style.background)}
-                      onChange={(e) =>
-                        setDraft({
-                          ...draft,
-                          style: { ...draft.style, background: e.target.value },
-                        })
-                      }
+                      onChange={(e) => setDraft({ ...draft, style: { ...draft.style, background: e.target.value } })}
                     />
                   </div>
                   <div className="flex-1 min-w-[12rem]">
-                    <Label className="text-xs">CSS background</Label>
+                    <Label className="text-xs">CSS (solid or gradient)</Label>
                     <Input
                       className="mt-1 font-mono text-xs"
                       value={draft.style.background}
-                      onChange={(e) =>
-                        setDraft({
-                          ...draft,
-                          style: { ...draft.style, background: e.target.value },
-                        })
-                      }
-                      placeholder="#0f172a or linear-gradient(...)"
+                      onChange={(e) => setDraft({ ...draft, style: { ...draft.style, background: e.target.value } })}
                     />
                   </div>
                 </div>
                 <div>
-                  <Label className="text-xs">Padding (CSS)</Label>
+                  <Label className="text-xs">Padding</Label>
                   <Input
                     className="mt-1 font-mono text-xs"
                     value={draft.style.padding ?? ""}
                     onChange={(e) => setDraft({ ...draft, style: { ...draft.style, padding: e.target.value } })}
-                    placeholder="e.g. 0 or 2rem 1rem"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Margin bottom</Label>
+                  <Input
+                    className="mt-1 font-mono text-xs"
+                    value={draft.style.marginBottom ?? ""}
+                    onChange={(e) => setDraft({ ...draft, style: { ...draft.style, marginBottom: e.target.value } })}
+                    placeholder="e.g. 2rem"
                   />
                 </div>
               </div>
 
               <Button className="w-full" onClick={saveDraftToBlocks}>
-                Apply to draft
+                Apply changes
               </Button>
             </div>
           )}

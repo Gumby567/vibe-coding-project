@@ -38,9 +38,9 @@ const Login = () => {
           <CardHeader>
             <CardTitle>No CMS access</CardTitle>
             <CardDescription>
-              Signed in as {user.email}. Set <code className="text-xs">app_metadata.role</code> to{" "}
-              <code className="text-xs">admin</code> or <code className="text-xs">editor</code> for this user in Supabase
-              Auth.
+              Signed in as {user.email}. Set <code className="text-xs">app_metadata.role</code> to one of{" "}
+              <code className="text-xs">superadmin</code>, <code className="text-xs">admin</code>, or{" "}
+              <code className="text-xs">editor</code> in Supabase Auth (user metadata).
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
@@ -87,8 +87,8 @@ const Login = () => {
         <CardHeader>
           <CardTitle>Sign in</CardTitle>
           <CardDescription>
-            CMS access uses <code className="text-xs">user.app_metadata.role</code> — allowed values:{" "}
-            <code className="text-xs">admin</code> or <code className="text-xs">editor</code>.
+            CMS access uses <code className="text-xs">user.app_metadata.role</code>: <code className="text-xs">superadmin</code>,{" "}
+            <code className="text-xs">admin</code>, or <code className="text-xs">editor</code>.
           </CardDescription>
         </CardHeader>
         <CardContent>

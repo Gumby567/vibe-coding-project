@@ -1,59 +1,96 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useI18n } from "@/contexts/I18nContext";
+import type { ContentBlock, FormField } from "../../types/cms";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 import { Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-const contactSchema = z.object({
-  companyName: z.string().trim().min(1).max(200),
-  contactPerson: z.string().trim().min(1).max(200),
-  email: z.string().trim().email().max(255),
-  message: z.string().trim().min(1).max(2000),
-  consent: z.literal(true, { errorMap: () => ({ message: "Consent is required" }) }),
-});
+function buildSchema(fields: FormField[]) {
+  const sorted = [...fields].sort((a, b) => a.order - b.order);
+  const shape: Record<string, z.ZodTypeAny> = {};
+  for (const f of sorted) {
+    if (f.type === "checkbox") {
+      shape[f.id] = f.isRequired
+        ? z.literal(true, { errorMap: () => ({ message: "Required" }) })
+        : z.boolean().optional();
+    } else if (f.type === "email") {
+      shape[f.id] = f.isRequired
+        ? z.string().trim().email().max(255)
+        : z.union([z.literal(""), z.string().trim().email().max(255)]);
+    } else if (f.type === "textarea") {
+      shape[f.id] = f.isRequired
+        ? z.string().trim().min(1).max(5000)
+        : z.union([z.literal(""), z.string().trim().max(5000)]);
+    } else {
+      shape[f.id] = f.isRequired
+        ? z.string().trim().min(1).max(500)
+        : z.union([z.literal(""), z.string().trim().max(500)]);
+    }
+  }
+  return z.object(shape);
+}
 
-const ContactSection = () => {
-  const { t } = useI18n();
+type Props = {
+  block: ContentBlock;
+};
+
+const SEND_EMAIL_URL = import.meta.env.VITE_SEND_EMAIL_URL ?? "/api/send-email";
+
+const ContactSection = ({ block }: Props) => {
+  const { lang, payload } = useI18n();
   const { toast } = useToast();
-  const [form, setForm] = useState({
-    companyName: "",
-    contactPerson: "",
-    email: "",
-    message: "",
-    consent: false,
-  });
+  const fc = payload.formConfig;
+  const fields = useMemo(() => [...fc.fields].sort((a, b) => a.order - b.order), [fc.fields]);
+  const schema = useMemo(() => buildSchema(fields), [fields]);
+
+  const initial = useMemo(() => {
+    const o: Record<string, string | boolean> = {};
+    for (const f of fields) {
+      o[f.id] = f.type === "checkbox" ? false : "";
+    }
+    return o;
+  }, [fields]);
+
+  const [form, setForm] = useState<Record<string, string | boolean>>(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
+  const c = block.content[lang] ?? block.content.en ?? {};
+  const st = block.style;
+
+  const update = (id: string, value: string | boolean) => {
+    setForm((prev) => ({ ...prev, [id]: value }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const result = contactSchema.safeParse(form);
+    const result = schema.safeParse(form);
     if (!result.success) {
       const fieldErrors: Record<string, string> = {};
       result.error.errors.forEach((err) => {
-        if (err.path[0]) fieldErrors[err.path[0] as string] = err.message;
+        if (err.path[0]) fieldErrors[String(err.path[0])] = err.message;
       });
       setErrors(fieldErrors);
       return;
     }
     setErrors({});
     setSubmitting(true);
+    const teamSlug = import.meta.env.VITE_TEAM_SLUG ?? "team-slug";
     try {
-      const res = await fetch("/api/send-email", {
+      const res = await fetch(SEND_EMAIL_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          companyName: result.data.companyName,
-          contactPerson: result.data.contactPerson,
-          email: result.data.email,
-          message: result.data.message,
-          consent: true,
+          ...result.data,
           source: "ai-web-2026",
+          team_slug: teamSlug,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -65,12 +102,13 @@ const ContactSection = () => {
         });
         return;
       }
-      toast({ title: t.contact.success });
-      setForm({ companyName: "", contactPerson: "", email: "", message: "", consent: false });
+      const successMsg = fc.successMessage[lang] ?? fc.successMessage.en ?? "";
+      toast({ title: successMsg });
+      setForm(initial);
     } catch {
       toast({
         title: "Network error",
-        description: "Submit failed. Is the dev server running with the API middleware?",
+        description: "Submit failed. Check deployment API route (e.g. Netlify function) and environment variables.",
         variant: "destructive",
       });
     } finally {
@@ -78,67 +116,73 @@ const ContactSection = () => {
     }
   };
 
-  const update = (field: string, value: string | boolean) => setForm((prev) => ({ ...prev, [field]: value }));
-
   return (
-    <section id="contact" className="py-20 bg-background">
+    <section
+      id="contact"
+      className="py-20 bg-background"
+      style={{
+        background: st.background,
+        padding: st.padding,
+        marginBottom: st.marginBottom,
+      }}
+    >
       <div className="container mx-auto px-4 max-w-xl">
-        <h2 className="text-3xl font-bold text-foreground text-center">{t.contact.title}</h2>
+        <h2 className="text-3xl font-bold text-foreground text-center">{c.title}</h2>
         <div className="mt-2 mx-auto h-1 w-16 rounded-full bg-accent" />
-        <p className="mt-4 text-center text-muted-foreground">{t.contact.subtitle}</p>
+        <p className="mt-4 text-center text-muted-foreground">{c.subtitle}</p>
 
         <Card className="mt-10">
           <CardContent className="pt-6">
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div>
-                <label className="text-sm font-medium text-foreground">{t.contact.fields.companyName}</label>
-                <Input
-                  value={form.companyName}
-                  onChange={(e) => update("companyName", e.target.value)}
-                  className="mt-1"
-                />
-                {errors.companyName && <p className="text-xs text-destructive mt-1">{errors.companyName}</p>}
-              </div>
-              <div>
-                <label className="text-sm font-medium text-foreground">{t.contact.fields.contactPerson}</label>
-                <Input
-                  value={form.contactPerson}
-                  onChange={(e) => update("contactPerson", e.target.value)}
-                  className="mt-1"
-                />
-                {errors.contactPerson && <p className="text-xs text-destructive mt-1">{errors.contactPerson}</p>}
-              </div>
-              <div>
-                <label className="text-sm font-medium text-foreground">{t.contact.fields.email}</label>
-                <Input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => update("email", e.target.value)}
-                  className="mt-1"
-                />
-                {errors.email && <p className="text-xs text-destructive mt-1">{errors.email}</p>}
-              </div>
-              <div>
-                <label className="text-sm font-medium text-foreground">{t.contact.fields.message}</label>
-                <Textarea
-                  value={form.message}
-                  onChange={(e) => update("message", e.target.value)}
-                  rows={4}
-                  className="mt-1"
-                />
-                {errors.message && <p className="text-xs text-destructive mt-1">{errors.message}</p>}
-              </div>
-              <div className="flex items-start gap-2">
-                <Checkbox
-                  checked={form.consent}
-                  onCheckedChange={(v) => update("consent", !!v)}
-                  id="consent"
-                />
-                <label htmlFor="consent" className="text-sm text-muted-foreground leading-tight cursor-pointer">
-                  {t.contact.fields.consent}
-                </label>
-              </div>
-              {errors.consent && <p className="text-xs text-destructive">{errors.consent}</p>}
+            <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+              {fields.map((f) => {
+                const label = f.label[lang] ?? f.label.en ?? f.id;
+                const err = errors[f.id];
+                if (f.type === "checkbox") {
+                  return (
+                    <div key={f.id} className="flex items-start gap-2">
+                      <Checkbox
+                        checked={!!form[f.id]}
+                        onCheckedChange={(v) => update(f.id, !!v)}
+                        id={f.id}
+                      />
+                      <Label htmlFor={f.id} className="text-sm text-muted-foreground leading-tight cursor-pointer">
+                        {label}
+                        {f.isRequired ? <span className="text-destructive"> *</span> : null}
+                      </Label>
+                      {err && <p className="text-xs text-destructive col-span-full">{err}</p>}
+                    </div>
+                  );
+                }
+                return (
+                  <div key={f.id} className="space-y-1">
+                    <Label htmlFor={f.id}>
+                      {label}
+                      {f.isRequired ? <span className="text-destructive"> *</span> : null}
+                    </Label>
+                    {f.type === "textarea" ? (
+                      <Textarea
+                        id={f.id}
+                        name={f.id}
+                        value={String(form[f.id] ?? "")}
+                        onChange={(e) => update(f.id, e.target.value)}
+                        rows={4}
+                        className={cn(err && "border-destructive")}
+                      />
+                    ) : (
+                      <Input
+                        id={f.id}
+                        name={f.id}
+                        type={f.type === "email" ? "email" : "text"}
+                        value={String(form[f.id] ?? "")}
+                        onChange={(e) => update(f.id, e.target.value)}
+                        className={cn(err && "border-destructive")}
+                        autoComplete={f.type === "email" ? "email" : "on"}
+                      />
+                    )}
+                    {err && <p className="text-xs text-destructive">{err}</p>}
+                  </div>
+                );
+              })}
 
               <Button type="submit" className="w-full" disabled={submitting}>
                 {submitting ? (
@@ -147,7 +191,7 @@ const ContactSection = () => {
                     Sending…
                   </>
                 ) : (
-                  t.contact.submit
+                  fc.submitButtonLabel[lang] ?? fc.submitButtonLabel.en
                 )}
               </Button>
             </form>

@@ -1,0 +1,63 @@
+AI Web Session 2026 — Proof & documentation
+============================================
+
+Student name: Replace with your name (also set VITE_STUDENT_NAME in Netlify env for the footer default).
+Team slug: Replace with your team (set VITE_TEAM_SLUG in Netlify).
+
+Live site URL:
+  (add after Netlify deploy)
+
+Git repository URL:
+  https://github.com/Gumby567/vibe-coding-project
+
+Stack:
+  - Vite 5 + React 18 + TypeScript
+  - React Router, TanStack Query, shadcn/ui (Radix), Tailwind CSS
+  - Supabase (PostgreSQL, Auth, JS client)
+  - Resend (email API via server handler)
+  - Netlify (static hosting + serverless function for /api/send-email)
+
+How to access ClearContent CMS
+-------------------------------
+1. Deploy the app and configure Supabase + environment variables (see below).
+2. In Supabase Auth, create a user and set app_metadata.role to "superadmin", "admin", or "editor".
+3. Open: https://<your-netlify-site>/login and sign in.
+4. CMS routes are under /admin (Page Builder, Menu & footer, Form builder, SEO, Languages, Users & roles).
+
+Where the public site reads CMS configuration
+---------------------------------------------
+- Table: site_content (single row recommended).
+- Column: cms_data (JSON) holds blocks, nav, formConfig, seo, i18n, footer.
+- Column: blocks (JSON) mirrors blocks array for backward compatibility.
+- The React app fetches via Supabase anon key: src/hooks/useSiteCms.ts
+- Fallback defaults: src/lib/cms-defaults.ts (createDefaultCmsPayload) if no row exists.
+
+Where inquiries are stored
+---------------------------
+- Supabase table: inquiries
+- Columns used: id (uuid), payload (jsonb), source (text, default ai-web-2026), team_slug (text)
+- Insert + email: server/send-email-handler.ts (service role key required on the server only).
+
+Where Resend is integrated
+---------------------------
+- Server logic: server/send-email-handler.ts
+- Local dev: Vite middleware wires POST /api/send-email → server/vite-plugin-send-email.ts
+- Production (Netlify): netlify/functions/send-email.ts → same handleSendEmail
+
+Environment variables (set in Netlify UI, never commit secrets)
+----------------------------------------------------------------
+VITE_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY
+VITE_TEAM_SLUG
+VITE_STUDENT_NAME
+SUPABASE_SERVICE_ROLE_KEY  (Netlify functions / serverless only)
+RESEND_API_KEY
+RESEND_FROM_EMAIL or RESEND_FROM
+ADMIN_NOTIFICATION_EMAIL or ADMIN_EMAIL
+Optional: VITE_SEND_EMAIL_URL=/api/send-email (default; Netlify redirects to the function)
+
+Database setup
+--------------
+Run the SQL in supabase/schema.sql in the Supabase SQL editor.
+
+Do not put real passwords or service keys in this file.

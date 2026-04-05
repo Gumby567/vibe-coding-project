@@ -3,13 +3,17 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { I18nProvider } from "@/contexts/I18nContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { RequireAdminRole } from "@/middleware/RequireAdminRole";
 import Index from "./pages/Index.tsx";
 import Login from "./pages/Login.tsx";
 import AdminLayout from "./pages/admin/AdminLayout.tsx";
 import PageBuilder from "./pages/admin/PageBuilder.tsx";
+import MenuEditor from "./pages/admin/MenuEditor.tsx";
+import FormBuilder from "./pages/admin/FormBuilder.tsx";
+import SEOManager from "./pages/admin/SEOManager.tsx";
+import LanguagesManager from "./pages/admin/LanguagesManager.tsx";
+import UsersPage from "./pages/admin/UsersPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -18,10 +22,9 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <TooltipProvider>
-        <I18nProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/login" element={<Login />} />
@@ -35,11 +38,15 @@ const App = () => (
               >
                 <Route index element={<Navigate to="page-builder" replace />} />
                 <Route path="page-builder" element={<PageBuilder />} />
+                <Route path="menu" element={<MenuEditor />} />
+                <Route path="form-builder" element={<FormBuilder />} />
+                <Route path="seo" element={<SEOManager />} />
+                <Route path="languages" element={<LanguagesManager />} />
+                <Route path="users" element={<UsersPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
-          </BrowserRouter>
-        </I18nProvider>
+        </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>
   </QueryClientProvider>

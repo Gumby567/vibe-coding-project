@@ -1,5 +1,6 @@
 import type { Connect } from "vite";
 import type { Plugin } from "vite";
+import { loadServerEnvOnce } from "./load-server-env";
 import { handleSendEmail } from "./send-email-handler";
 
 function readBody(req: Connect.IncomingMessage): Promise<string> {
@@ -37,9 +38,11 @@ export function sendEmailApiPlugin(): Plugin {
   return {
     name: "send-email-api",
     configureServer(server) {
+      loadServerEnvOnce(server.config.mode);
       attach(server.middlewares);
     },
     configurePreviewServer(server) {
+      loadServerEnvOnce(server.config.mode);
       attach(server.middlewares);
     },
   };
