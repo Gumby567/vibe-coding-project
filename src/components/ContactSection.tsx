@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
+import { Loader2 } from "lucide-react";
 
 const contactSchema = z.object({
   companyName: z.string().trim().min(1).max(200),
@@ -27,8 +28,9 @@ const ContactSection = () => {
     consent: false,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const result = contactSchema.safeParse(form);
     if (!result.success) {
@@ -40,12 +42,43 @@ const ContactSection = () => {
       return;
     }
     setErrors({});
-    toast({ title: t.contact.success });
-    setForm({ companyName: "", contactPerson: "", email: "", message: "", consent: false });
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyName: result.data.companyName,
+          contactPerson: result.data.contactPerson,
+          email: result.data.email,
+          message: result.data.message,
+          consent: true,
+          source: "ai-web-2026",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        toast({
+          title: "Could not send",
+          description: typeof data.error === "string" ? data.error : res.statusText,
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({ title: t.contact.success });
+      setForm({ companyName: "", contactPerson: "", email: "", message: "", consent: false });
+    } catch {
+      toast({
+        title: "Network error",
+        description: "Submit failed. Is the dev server running with the API middleware?",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const update = (field: string, value: string | boolean) =>
-    setForm((prev) => ({ ...prev, [field]: value }));
+  const update = (field: string, value: string | boolean) => setForm((prev) => ({ ...prev, [field]: value }));
 
   return (
     <section id="contact" className="py-20 bg-background">
@@ -107,8 +140,15 @@ const ContactSection = () => {
               </div>
               {errors.consent && <p className="text-xs text-destructive">{errors.consent}</p>}
 
-              <Button type="submit" className="w-full">
-                {t.contact.submit}
+              <Button type="submit" className="w-full" disabled={submitting}>
+                {submitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sending…
+                  </>
+                ) : (
+                  t.contact.submit
+                )}
               </Button>
             </form>
           </CardContent>
