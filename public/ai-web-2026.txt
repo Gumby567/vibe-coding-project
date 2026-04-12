@@ -1,11 +1,10 @@
 AI Web Session 2026 — Proof & documentation
 ============================================
 
-Student name: Replace with your name (also set VITE_STUDENT_NAME in Netlify env for the footer default).
-Team slug: Replace with your team (set VITE_TEAM_SLUG in Netlify).
+Student name: Diego Alvarez
+Team slug: CoolGas Trading
 
-Live site URL:
-  (add after Netlify deploy)
+Live site URL: 
 
 Git repository URL:
   https://github.com/Gumby567/vibe-coding-project
@@ -17,7 +16,28 @@ Stack:
   - Resend (email API via server handler)
   - Netlify (static hosting + serverless function for /api/send-email)
 
-How to access ClearContent CMS
+How to access ClearContent CMS:
+  - Go to /admin on the deployed site
+  - Sign in with Supabase auth
+  - Use the CMS panels for Page Builder, Menu, Form Builder, SEO, and languages
+
+Where public site reads CMS config from:
+  - Supabase site_content table via /src/lib/cms-remote.ts
+  - Blocks table content and SEO entries are merged into public payload
+
+Where inquiries are stored:
+  - Supabase inquiries table
+  - Insert logic is in /src/components/ContactSection.tsx
+
+Where Resend integration is located:
+  - Netlify function: /netlify/functions/send-email.ts
+  - Email handler: /server/send-email-handler.ts
+  - Uses RESEND_API_KEY and ADMIN_NOTIFICATION_EMAIL via environment variables
+
+Notes:
+  - Set VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, and VITE_TEAM_SLUG in Netlify.
+  - Do not commit real secrets; .env.local is ignored by git.
+
 -------------------------------
 1. Deploy the app and configure Supabase + environment variables (see below).
 2. In Supabase Auth, create a user and set app_metadata.role to "superadmin", "admin", or "editor".

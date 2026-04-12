@@ -12,6 +12,8 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { useAdminCms, type AdminCmsContextValue } from "@/hooks/useAdminCms";
+import { useAuth } from "@/contexts/AuthContext";
+import { canManageUsers, canManageSystemSettings } from "@/lib/auth-roles";
 import {
   LayoutDashboard,
   Menu,
@@ -19,6 +21,8 @@ import {
   Search,
   Languages,
   Users,
+  Layers,
+  History,
 } from "lucide-react";
 
 function NavItem({ to, label, icon }: { to: string; label: string; icon: React.ReactNode }) {
@@ -38,6 +42,9 @@ function NavItem({ to, label, icon }: { to: string; label: string; icon: React.R
 
 const AdminLayout = () => {
   const cms = useAdminCms();
+  const { role } = useAuth();
+  const showUsers = canManageUsers(role);
+  const showLanguages = canManageSystemSettings(role);
 
   return (
     <SidebarProvider>
@@ -52,8 +59,16 @@ const AdminLayout = () => {
                   <NavItem to="/admin/menu" label="Menu & footer" icon={<Menu className="mr-2 h-4 w-4" />} />
                   <NavItem to="/admin/form-builder" label="Form builder" icon={<FileInput className="mr-2 h-4 w-4" />} />
                   <NavItem to="/admin/seo" label="SEO" icon={<Search className="mr-2 h-4 w-4" />} />
-                  <NavItem to="/admin/languages" label="Languages" icon={<Languages className="mr-2 h-4 w-4" />} />
-                  <NavItem to="/admin/users" label="Users & roles" icon={<Users className="mr-2 h-4 w-4" />} />
+                  {showLanguages && (
+                    <NavItem to="/admin/languages" label="Languages" icon={<Languages className="mr-2 h-4 w-4" />} />
+                  )}
+                  {showUsers && (
+                    <NavItem to="/admin/users" label="Users & roles" icon={<Users className="mr-2 h-4 w-4" />} />
+                  )}
+                  <NavItem to="/admin/blocks" label="Blocks (table)" icon={<Layers className="mr-2 h-4 w-4" />} />
+                  {showUsers && (
+                    <NavItem to="/admin/revisions" label="Revisions" icon={<History className="mr-2 h-4 w-4" />} />
+                  )}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>

@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { CmsPayload, SiteContentRow } from "../../types/cms";
 import { createDefaultCmsPayload, migrateRowToPayload } from "@/lib/cms-defaults";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { fetchBlocksFromSupabase } from "@/lib/cms-remote";
 
 export function useAdminCms() {
   const queryClient = useQueryClient();
@@ -28,13 +29,32 @@ export function useAdminCms() {
     }
     if (!data) {
       setRowId(null);
-      setPayload(createDefaultCmsPayload());
+      let nextPayload = createDefaultCmsPayload();
+      try {
+        const tableBlocks = await fetchBlocksFromSupabase();
+        if (tableBlocks.length) {
+          nextPayload = { ...nextPayload, blocks: tableBlocks };
+        }
+      } catch {
+        /* keep defaults */
+      }
+      setPayload(nextPayload);
       setUpdatedAt(null);
       setLoading(false);
       return;
     }
     setRowId(data.id);
-    setPayload(migrateRowToPayload(data as SiteContentRow));
+    const migrated = migrateRowToPayload(data as SiteContentRow);
+    try {
+      const tableBlocks = await fetchBlocksFromSupabase();
+      if (tableBlocks.length) {
+        setPayload({ ...migrated, blocks: tableBlocks });
+      } else {
+        setPayload(migrated);
+      }
+    } catch {
+      setPayload(migrated);
+    }
     setUpdatedAt(data.updated_at ?? null);
     setLoading(false);
   }, []);

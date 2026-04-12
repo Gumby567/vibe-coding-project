@@ -1,20 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import type { CmsPayload, SiteContentRow } from "../../types/cms";
-import { createDefaultCmsPayload, migrateRowToPayload } from "@/lib/cms-defaults";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import type { CmsPayload } from "../../types/cms";
+import { createDefaultCmsPayload } from "@/lib/cms-defaults";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import { loadPublicCmsPayload } from "@/lib/cms-remote";
 
 async function fetchCmsPayload(): Promise<CmsPayload> {
-  if (!isSupabaseConfigured || !supabase) {
+  if (!isSupabaseConfigured) {
     return createDefaultCmsPayload();
   }
-  const { data, error } = await supabase.from("site_content").select("*").limit(1).maybeSingle();
-  if (error) {
-    throw error;
-  }
-  if (!data) {
-    return createDefaultCmsPayload();
-  }
-  return migrateRowToPayload(data as SiteContentRow);
+  return loadPublicCmsPayload();
 }
 
 export function useSiteCms() {

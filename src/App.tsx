@@ -14,6 +14,8 @@ import FormBuilder from "./pages/admin/FormBuilder.tsx";
 import SEOManager from "./pages/admin/SEOManager.tsx";
 import LanguagesManager from "./pages/admin/LanguagesManager.tsx";
 import UsersPage from "./pages/admin/UsersPage.tsx";
+import BlocksAdmin from "./pages/admin/BlocksAdmin.tsx";
+import Revisions from "./pages/admin/Revisions.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -43,6 +45,8 @@ const App = () => (
                 <Route path="seo" element={<SEOManager />} />
                 <Route path="languages" element={<LanguagesManager />} />
                 <Route path="users" element={<UsersPage />} />
+                <Route path="blocks" element={<BlocksAdmin />} />
+                <Route path="revisions" element={<Revisions />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

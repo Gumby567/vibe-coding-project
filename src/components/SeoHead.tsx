@@ -12,7 +12,7 @@ export function SeoHead({ payload, lang }: Props) {
   const description = payload.seo.description[lang] ?? payload.seo.description.en ?? "";
   const ogTitle = payload.seo.ogTitle?.[lang] ?? payload.seo.ogTitle?.en ?? title;
   const ogDesc = payload.seo.ogDescription?.[lang] ?? payload.seo.ogDescription?.en ?? description;
-  const team = import.meta.env.VITE_TEAM_SLUG ?? "<TEAM_SLUG>";
+  const team = import.meta.env.VITE_TEAM_SLUG ?? "YOUR_TEAM";
 
   return (
     <Helmet>

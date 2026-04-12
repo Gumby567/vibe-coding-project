@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 function buildSchema(fields: FormField[]) {
   const sorted = [...fields].sort((a, b) => a.order - b.order);
@@ -37,11 +38,51 @@ function buildSchema(fields: FormField[]) {
   return z.object(shape);
 }
 
+function strVal(v: unknown): string {
+  if (typeof v === "string") return v.trim();
+  if (typeof v === "boolean") return v ? "yes" : "no";
+  return "";
+}
+
+function inquiryRowFromForm(data: Record<string, unknown>) {
+  const company =
+    strVal(data.company_name) ||
+    strVal(data.companyName) ||
+    strVal(data.company) ||
+    "";
+  const contactPerson =
+    strVal(data.contact_person) ||
+    strVal(data.contactPerson) ||
+    strVal(data.name) ||
+    "";
+  const email = strVal(data.email);
+  let message =
+    strVal(data.message) ||
+    strVal(data.body) ||
+    "";
+  const consent = data.consent === true || data.agree === true;
+  const marketing = data.marketing === true;
+  const extras: string[] = [];
+  if (consent) extras.push("consent: accepted");
+  if (marketing) extras.push("marketing: opted in");
+  if (extras.length) {
+    message = message ? `${message}\n\n${extras.join("\n")}` : extras.join("\n");
+  }
+  return { company_name: company, contact_person: contactPerson, email, message };
+}
+
+const DEFAULT_SUCCESS = "Thank you for your message. We will contact you shortly.";
+
+function sendEmailUrl() {
+  return (
+    import.meta.env.VITE_SEND_EMAIL_URL ??
+    (import.meta.env.DEV ? "/api/send-email" : "/.netlify/functions/send-email")
+  );
+}
+
 type Props = {
   block: ContentBlock;
 };
-
-const SEND_EMAIL_URL = import.meta.env.VITE_SEND_EMAIL_URL ?? "/api/send-email";
 
 const ContactSection = ({ block }: Props) => {
   const { lang, payload } = useI18n();
@@ -82,33 +123,65 @@ const ContactSection = ({ block }: Props) => {
     }
     setErrors({});
     setSubmitting(true);
-    const teamSlug = import.meta.env.VITE_TEAM_SLUG ?? "team-slug";
+    const teamSlug = import.meta.env.VITE_TEAM_SLUG ?? "YOUR_TEAM";
+    const source = "ai-web-2026";
+
     try {
-      const res = await fetch(SEND_EMAIL_URL, {
+      if (!isSupabaseConfigured || !supabase) {
+        toast({
+          title: "Configuration error",
+          description: "Supabase is not configured.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const row = {
+        ...inquiryRowFromForm(result.data as Record<string, unknown>),
+        team_slug: teamSlug,
+        source,
+      };
+
+      const { data: inserted, error: insErr } = await supabase.from("inquiries").insert(row).select("id").maybeSingle();
+
+      if (insErr || !inserted?.id) {
+        toast({
+          title: "Could not save inquiry",
+          description: insErr?.message ?? "Insert failed.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const inquiryId = String(inserted.id);
+      const res = await fetch(sendEmailUrl(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...result.data,
-          source: "ai-web-2026",
+          inquiry_id: inquiryId,
           team_slug: teamSlug,
+          source,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
         toast({
-          title: "Could not send",
+          title: "Saved, but email failed",
           description: typeof data.error === "string" ? data.error : res.statusText,
           variant: "destructive",
         });
         return;
       }
-      const successMsg = fc.successMessage[lang] ?? fc.successMessage.en ?? "";
+
+      const successMsg =
+        fc.successMessage[lang] ?? fc.successMessage.en ?? DEFAULT_SUCCESS;
       toast({ title: successMsg });
       setForm(initial);
     } catch {
       toast({
         title: "Network error",
-        description: "Submit failed. Check deployment API route (e.g. Netlify function) and environment variables.",
+        description: "Submit failed. Check Supabase policies and the send-email function.",
         variant: "destructive",
       });
     } finally {
@@ -137,19 +210,28 @@ const ContactSection = ({ block }: Props) => {
               {fields.map((f) => {
                 const label = f.label[lang] ?? f.label.en ?? f.id;
                 const err = errors[f.id];
+                const errId = err ? `${f.id}-error` : undefined;
                 if (f.type === "checkbox") {
                   return (
-                    <div key={f.id} className="flex items-start gap-2">
-                      <Checkbox
-                        checked={!!form[f.id]}
-                        onCheckedChange={(v) => update(f.id, !!v)}
-                        id={f.id}
-                      />
-                      <Label htmlFor={f.id} className="text-sm text-muted-foreground leading-tight cursor-pointer">
-                        {label}
-                        {f.isRequired ? <span className="text-destructive"> *</span> : null}
-                      </Label>
-                      {err && <p className="text-xs text-destructive col-span-full">{err}</p>}
+                    <div key={f.id} className="space-y-1">
+                      <div className="flex items-start gap-2">
+                        <Checkbox
+                          checked={!!form[f.id]}
+                          onCheckedChange={(v) => update(f.id, !!v)}
+                          id={f.id}
+                          aria-invalid={!!err}
+                          aria-describedby={errId}
+                        />
+                        <Label htmlFor={f.id} className="text-sm text-muted-foreground leading-tight cursor-pointer">
+                          {label}
+                          {f.isRequired ? <span className="text-destructive"> *</span> : null}
+                        </Label>
+                      </div>
+                      {err ? (
+                        <p id={errId} className="text-xs text-destructive pl-8">
+                          {err}
+                        </p>
+                      ) : null}
                     </div>
                   );
                 }
@@ -167,6 +249,9 @@ const ContactSection = ({ block }: Props) => {
                         onChange={(e) => update(f.id, e.target.value)}
                         rows={4}
                         className={cn(err && "border-destructive")}
+                        aria-invalid={!!err}
+                        aria-describedby={errId}
+                        aria-required={f.isRequired}
                       />
                     ) : (
                       <Input
@@ -177,9 +262,16 @@ const ContactSection = ({ block }: Props) => {
                         onChange={(e) => update(f.id, e.target.value)}
                         className={cn(err && "border-destructive")}
                         autoComplete={f.type === "email" ? "email" : "on"}
+                        aria-invalid={!!err}
+                        aria-describedby={errId}
+                        aria-required={f.isRequired}
                       />
                     )}
-                    {err && <p className="text-xs text-destructive">{err}</p>}
+                    {err ? (
+                      <p id={errId} className="text-xs text-destructive">
+                        {err}
+                      </p>
+                    ) : null}
                   </div>
                 );
               })}

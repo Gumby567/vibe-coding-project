@@ -1,0 +1,56 @@
+What else remains
+
+1. True visual page builder
+You have a better preview workflow now, but the assignment still needs a more complete visual editor:
+
+real canvas / page preview with inline content positioning
+block handles and visible drag/drop targets
+visual styling controls for spacing/alignment
+explicit duplicate/hide controls in the canvas
+
+
+2. Revision history / rollback
+You now have audit metadata, but not:
+
+block revision history
+rollback UI
+snapshot storage for past versions
+
+
+3. Backend role enforcement
+UI-level role checks are improved, but you still need to verify Supabase Row-Level Security:
+
+editors should be restricted from destructive actions
+admins/superadmins should have broader write access
+users/roles pages should be protected by backend policies too
+
+
+4. Final proof values
+Replace placeholder values with your actual details:
+
+Student name
+Team slug
+Live site URL
+ADMIN_NOTIFICATION_EMAIL
+VITE_STUDENT_NAME
+VITE_TEAM_SLUG
+
+
+5. Deploy and test end-to-end
+deploy to Netlify
+verify public site loads from Supabase
+verify Resend email is sent after inquiry save
+confirm admin page edits refresh the public site
+
+
+How close are you?
+I’d say you are now about 80% complete.
+The core CMS, form pipeline, email integration, and SEO workflow are implemented.
+The remaining work is mostly:
+polish the builder into a true visual canvas
+add revision/rollback support
+finalize role-based backend security
+complete final deployment and proof values
+
+
+Note: .env.local is currently present locally, but it is ignored by git (*.local is in .gitignore), so your secrets are not committed.

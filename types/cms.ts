@@ -47,6 +47,8 @@ export interface ContentBlock {
   order: number;
   content: Record<string, BlockLocalizedContent>;
   style: BlockStyle;
+  updated_at?: string | null;
+  updated_by_email?: string | null;
 }
 
 export interface NavLinkItem {
@@ -98,4 +100,45 @@ export interface SiteContentRow {
   cms_data?: CmsPayload | null;
   updated_at: string | null;
   updated_by_email?: string | null;
+}
+
+/** Row shape for Supabase `blocks` table (source of truth for page sections). */
+export interface BlockRow {
+  id: string;
+  type: string;
+  order: number;
+  is_visible?: boolean | null;
+  style?: BlockStyle | null;
+  /** Localized copy: `{ en: {...}, et: {...} }` */
+  content?: Record<string, BlockLocalizedContent> | null;
+  updated_at?: string | null;
+  updated_by_email?: string | null;
+}
+
+/** Row for `translations` overlays (optional). */
+export interface TranslationRow {
+  resource_type: string;
+  resource_id: string;
+  lang: LangKey;
+  payload: Partial<BlockLocalizedContent> | Record<string, unknown>;
+}
+
+/** Row for `form_fields` table. */
+export interface FormFieldRow {
+  id: string;
+  field_key: string;
+  type: "text" | "email" | "textarea" | "checkbox";
+  label_en: string | null;
+  label_et: string | null;
+  is_required: boolean | null;
+  order: number | null;
+}
+
+/** Row for `seo` table (per language). */
+export interface SeoRow {
+  lang: LangKey;
+  title: string | null;
+  description: string | null;
+  og_title?: string | null;
+  og_description?: string | null;
 }

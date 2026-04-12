@@ -1,30 +1,30 @@
-import { useSearchParams } from "react-router-dom";
-import { useSiteCms } from "@/hooks/useSiteCms";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { I18nProvider, useI18n } from "@/contexts/I18nContext";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import ContactSection from "@/components/ContactSection";
 import { BlockRenderer } from "@/components/BlockRenderer";
 import { SeoHead } from "@/components/SeoHead";
+import { createDefaultCmsPayload, sortBlocks } from "@/lib/cms-defaults";
+import { loadPublicCmsPayload } from "@/lib/cms-remote";
 import type { CmsPayload } from "../../types/cms";
-import { sortBlocks } from "@/lib/cms-defaults";
 
-function IndexInner() {
+function IndexShell() {
   const { lang, payload } = useI18n();
-  const sorted = sortBlocks(payload.blocks).filter((b) => b.isVisible);
+  const blocks = useMemo(
+    () => sortBlocks(payload.blocks).filter((b) => b.isVisible),
+    [payload.blocks],
+  );
 
   return (
     <>
       <SeoHead payload={payload} lang={lang} />
-      <div className="min-h-screen">
+      <div className="min-h-screen flex flex-col">
         <Navbar />
-        {sorted.map((block) =>
-          block.type === "contact" ? (
-            <ContactSection key={block.id} block={block} />
-          ) : (
-            <BlockRenderer key={block.id} block={block} lang={lang} />
-          ),
-        )}
+        <main className="flex-1">
+          {blocks.map((block) => (
+            <BlockRenderer key={block.id} block={block} />
+          ))}
+        </main>
         <Footer />
       </div>
     </>
@@ -32,43 +32,63 @@ function IndexInner() {
 }
 
 const Index = () => {
-  const { data, isLoading, isError, error, refetch } = useSiteCms();
-  const [searchParams] = useSearchParams();
-  const preview = searchParams.get("preview") === "1";
+  const [payload, setPayload] = useState<CmsPayload>(() => createDefaultCmsPayload());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-2 text-muted-foreground">
-        <p>Loading content…</p>
-      </div>
-    );
-  }
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const next = await loadPublicCmsPayload();
+      setPayload(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setPayload(createDefaultCmsPayload());
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  if (isError) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
-        <p className="text-destructive">Could not load CMS content.</p>
-        <p className="text-sm text-muted-foreground max-w-md">{String(error)}</p>
-        <button type="button" className="text-primary underline" onClick={() => refetch()}>
-          Retry
-        </button>
-      </div>
-    );
-  }
-
-  const payload = data as CmsPayload;
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("previewDraft") === "1") {
+      const preview = window.sessionStorage.getItem("cmsPreviewPayload");
+      if (preview) {
+        try {
+          setPayload(JSON.parse(preview) as CmsPayload);
+          setLoading(false);
+          return;
+        } catch {
+          setError("Unable to load preview draft.");
+          setLoading(false);
+          return;
+        }
+      }
+    }
+    void load();
+  }, [load]);
 
   return (
     <I18nProvider payload={payload}>
-      {preview && (
-        <div
-          role="status"
-          className="bg-amber-500 text-black text-center text-sm font-medium py-2 px-4"
-        >
-          Preview — public content is read from Supabase. Add ?preview=1 to any URL to show this banner.
+      {loading ? (
+        <div className="min-h-screen flex items-center justify-center text-muted-foreground text-sm">
+          Loading…
         </div>
+      ) : (
+        <>
+          {error ? (
+            <div className="bg-destructive/10 text-destructive text-center text-sm py-3 px-4 flex flex-wrap items-center justify-center gap-3">
+              <span>{error}</span>
+              <button type="button" className="underline font-medium" onClick={() => void load()}>
+                Retry
+              </button>
+            </div>
+          ) : null}
+          <IndexShell />
+        </>
       )}
-      <IndexInner />
     </I18nProvider>
   );
 };

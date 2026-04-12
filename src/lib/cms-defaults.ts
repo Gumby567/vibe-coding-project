@@ -8,8 +8,8 @@ import type {
 import { content } from "@/data/content";
 import type { SiteContent } from "@/data/content";
 
-const studentName = () => import.meta.env.VITE_STUDENT_NAME ?? "Student Name";
-const teamSlug = () => import.meta.env.VITE_TEAM_SLUG ?? "<TEAM_SLUG>";
+const studentName = () => import.meta.env.VITE_STUDENT_NAME ?? "X";
+const teamSlug = () => import.meta.env.VITE_TEAM_SLUG ?? "YOUR_TEAM";
 
 function watermarkFor(lang: "en" | "et"): string {
   const raw = content[lang].footer.built;
@@ -84,14 +84,14 @@ export function createDefaultFormConfig() {
     consentCheckboxLabel: { en: en.contact.fields.consent, et: et.contact.fields.consent },
     fields: [
       {
-        id: "companyName",
+        id: "company_name",
         type: "text" as const,
         label: { en: en.contact.fields.companyName, et: et.contact.fields.companyName },
         isRequired: true,
         order: 0,
       },
       {
-        id: "contactPerson",
+        id: "contact_person",
         type: "text" as const,
         label: { en: en.contact.fields.contactPerson, et: et.contact.fields.contactPerson },
         isRequired: true,
@@ -238,8 +238,8 @@ export function buildSiteContentFromPayload(payload: CmsPayload, lang: LangKey):
       title: contact?.content[lang]?.title ?? "",
       subtitle: contact?.content[lang]?.subtitle ?? "",
       fields: {
-        companyName: fc.fields.find((f) => f.id === "companyName")?.label[lang] ?? "",
-        contactPerson: fc.fields.find((f) => f.id === "contactPerson")?.label[lang] ?? "",
+        companyName: fc.fields.find((f) => f.id === "company_name" || f.id === "companyName")?.label[lang] ?? "",
+        contactPerson: fc.fields.find((f) => f.id === "contact_person" || f.id === "contactPerson")?.label[lang] ?? "",
         email: fc.fields.find((f) => f.id === "email")?.label[lang] ?? "",
         message: fc.fields.find((f) => f.id === "message")?.label[lang] ?? "",
         consent: pickLang(fc.consentCheckboxLabel as Record<string, string>, lang),
