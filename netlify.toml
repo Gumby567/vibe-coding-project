@@ -2,6 +2,11 @@
   command = "npm run build"
   publish = "dist"
 
+[env]
+  VITE_SUPABASE_URL = "https://sawnqbosygofelizzvuk.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhd25xYm9zeWdvZmVsaXp6dnVrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMTQ3MTEsImV4cCI6MjA5MDc5MDcxMX0.OvICzPkkJZlEobgtubNDzMWa_82n9lvQU9fVZqLF-_8"
+  RESEND_API_KEY = "re_6pyNS9Ud_Fsc7aY6Vi9Nc8b488c42ZZ3p"
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
