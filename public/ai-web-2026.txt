@@ -4,7 +4,7 @@ AI Web Session 2026 — Proof & documentation
 Student name: Diego Alvarez
 Team slug: CoolGas Trading
 
-Live site URL: 
+Live site URL: https://coolgastrading.netlify.app
 
 Git repository URL:
   https://github.com/Gumby567/vibe-coding-project
