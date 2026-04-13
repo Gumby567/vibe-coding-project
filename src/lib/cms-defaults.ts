@@ -211,6 +211,11 @@ export function buildSiteContentFromPayload(payload: CmsPayload, lang: LangKey):
   const fc = payload.formConfig;
 
   const linkLabel = (l: (typeof payload.nav.links)[0]) => pickLang(l.label, lang);
+  
+  // Generate watermark from environment variables
+  const student = import.meta.env.VITE_STUDENT_NAME ?? "X";
+  const team = import.meta.env.VITE_TEAM_SLUG ?? "Y";
+  const watermark = `Built in AI Web Session 2026, ClearContent CMS, Student: ${student}, Team: ${team}`;
 
   return {
     nav: {
@@ -248,7 +253,7 @@ export function buildSiteContentFromPayload(payload: CmsPayload, lang: LangKey):
       success: pickLang(fc.successMessage as Record<string, string>, lang),
     },
     footer: {
-      built: pickLang(payload.footer.watermark as Record<string, string>, lang),
+      built: watermark,
     },
   };
 }
