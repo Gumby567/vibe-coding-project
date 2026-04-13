@@ -137,7 +137,7 @@ const ContactSection = ({ block }: Props) => {
       }
 
       const row = {
-        ...inquiryRowFromForm(result.data as Record<string, unknown>),
+        payload: inquiryRowFromForm(result.data as Record<string, unknown>),
         team_slug: teamSlug,
         source,
       };

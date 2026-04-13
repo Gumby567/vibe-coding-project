@@ -153,10 +153,12 @@ export async function handleSendEmail(
     return "";
   };
   const row = {
-    company_name: strVal(payload.company_name) || strVal(payload.companyName),
-    contact_person: strVal(payload.contact_person) || strVal(payload.contactPerson),
-    email: strVal(payload.email),
-    message: strVal(payload.message),
+    payload: {
+      company_name: strVal(payload.company_name) || strVal(payload.companyName),
+      contact_person: strVal(payload.contact_person) || strVal(payload.contactPerson),
+      email: strVal(payload.email),
+      message: strVal(payload.message),
+    },
     team_slug: teamFromBody,
     source,
   };

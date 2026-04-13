@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import type { ContentBlock } from "../../../types/cms";
-import { sortBlocks } from "@/lib/cms-defaults";
+import { createDefaultCmsPayload, sortBlocks } from "@/lib/cms-defaults";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { deleteBlockRow, fetchBlocksFromSupabase, syncAllBlocksToSupabase } from "@/lib/cms-remote";
 import { canDeleteBlocks } from "@/lib/auth-roles";
@@ -89,6 +89,28 @@ const BlocksAdmin = () => {
 
   const sorted = sortBlocks(blocks);
 
+  const initializeBlocks = async () => {
+    if (!isSupabaseConfigured) {
+      setErr("Supabase env vars are not set.");
+      return;
+    }
+    setLoading(true);
+    setErr(null);
+    try {
+      const defaults = createDefaultCmsPayload().blocks;
+      const { error } = await syncAllBlocksToSupabase(defaults);
+      if (error) {
+        setErr(error);
+      } else {
+        setBlocks(sortBlocks(defaults));
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div>
       <h1 style={{ fontSize: "1.25rem", marginBottom: 8 }}>Blocks (table)</h1>
@@ -96,6 +118,11 @@ const BlocksAdmin = () => {
         <button type="button" onClick={() => void load()}>
           Reload
         </button>
+        {sorted.length === 0 ? (
+          <button type="button" onClick={() => void initializeBlocks()} style={{ marginLeft: 12 }}>
+            Initialize default blocks
+          </button>
+        ) : null}
       </p>
       {sorted.map((block, index) => (
         <BlockEditor
