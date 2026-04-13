@@ -6,6 +6,7 @@ import { BlockRenderer } from "@/components/BlockRenderer";
 import { SeoHead } from "@/components/SeoHead";
 import { createDefaultCmsPayload, sortBlocks } from "@/lib/cms-defaults";
 import { loadPublicCmsPayload } from "@/lib/cms-remote";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import type { CmsPayload } from "../../types/cms";
 
 function IndexShell() {
@@ -21,9 +22,19 @@ function IndexShell() {
       <div className="min-h-screen flex flex-col">
         <Navbar />
         <main className="flex-1">
-          {blocks.map((block) => (
-            <BlockRenderer key={block.id} block={block} />
-          ))}
+          {blocks.length === 0 ? (
+            <div className="min-h-screen flex items-center justify-center">
+              <div className="text-center">
+                <h1 className="text-2xl font-bold mb-4">No blocks found</h1>
+                <p className="text-muted-foreground mb-4">CMS payload: {JSON.stringify(payload, null, 2)}</p>
+                <p className="text-sm text-muted-foreground">Blocks count: {payload.blocks?.length || 0}</p>
+              </div>
+            </div>
+          ) : (
+            blocks.map((block) => (
+              <BlockRenderer key={block.id} block={block} />
+            ))
+          )}
         </main>
         <Footer />
       </div>
@@ -74,7 +85,11 @@ const Index = () => {
     <I18nProvider payload={payload}>
       {loading ? (
         <div className="min-h-screen flex items-center justify-center text-muted-foreground text-sm">
-          Loading…
+          <div className="text-center">
+            <p>Loading CMS content...</p>
+            <p className="text-xs mt-2">Supabase configured: {isSupabaseConfigured ? 'Yes' : 'No'}</p>
+            <p className="text-xs">Blocks in payload: {payload.blocks?.length || 0}</p>
+          </div>
         </div>
       ) : (
         <>
